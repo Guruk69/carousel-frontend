@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>FabricDost Carousel Generator</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #25223A;
+            margin: 0;
+            padding: 40px;
+            color: #25223A;
+        }
+
+        h1 {
+            color: #F68026;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        textarea,
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        textarea {
+            height: 400px;
+        }
+
+        button {
+            background: #F68026;
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            margin-top: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .cards {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card img {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .prompt {
+            font-size: 13px;
+            background: #f3f3f3;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+        }
+
+        .spinner {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #666;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>FabricDost Carousel Generator</h1> 
+
+        <!-- <label>Gemini API Key</label>
+        <input id="apiKey" placeholder="Paste API key"> -->
+
+        <label>Carousel Content</label>
+
+        <textarea id="content" placeholder="Day 7 - Sales Demo
+
+Slide 1: Frustrated fabric shop owner hearing 'I'll think about it'
+
+Slide 2: Customer holding fabric but unsure how it will look
+
+Slide 3: Phone showing AI try-on preview
+"></textarea>
+
+        <button onclick="generateSlides()">Generate Carousel Slides</button>
+
+        <button onclick="downloadAll()">Download All Slides</button>
+
+        <div id="cards" class="cards"></div>
+
+    </div>
+
+    <script>
+
+        let slides = []
+        let images = []
+
+        const promptTemplate = (desc) => `
+
+Create a professional 4:5 Instagram carousel slide for FabricDost.
+
+Context:
+FabricDost is an AI platform that helps fabric retail stores in India increase sales using visual previews.
+
+Visual style:
+Clean Indian retail aesthetic
+Fabric store environment
+Include shopkeepers or customers when appropriate
+Professional lighting
+Realistic photography style
+
+Brand colors:
+Mithai Orange (#F68026)
+Deep Indigo (#25223A)
+Off White (#F7F4ED)
+
+Slide concept:
+${desc}
+
+The image should be suitable for an Instagram carousel.
+
+`
+
+        function parseSlides(text) {
+
+            const regex = /Slide\s*\d+:\s*([\s\S]*?)(?=Slide\s*\d+:|$)/gi
+
+            let match
+            let results = []
+
+            while ((match = regex.exec(text)) !== null) {
+
+                results.push(match[1].trim())
+
+            }
+
+            return results
+
+        }
+
+        function generateSlides() {
+
+            const text = document.getElementById("content").value
+
+            slides = parseSlides(text)
+
+            const cards = document.getElementById("cards")
+
+            cards.innerHTML = ""
+
+            images = []
+
+            slides.forEach((slide, index) => {
+
+                const prompt = promptTemplate(slide)
+
+                const card = document.createElement("div")
+
+                card.className = "card"
+
+                card.innerHTML = `
+
+<h3>Slide ${index + 1}</h3>
+
+<div class="prompt">${prompt}</div>
+
+<img id="img${index}"/>
+
+<div class="spinner" id="spin${index}"></div>
+
+<button onclick="generateImage(${index})">Generate Image</button>
+
+<button onclick="retry(${index})">Retry</button>
+
+<button onclick="downloadSlide(${index})">Download</button>
+
+`
+
+                cards.appendChild(card)
+
+            })
+
+        }
+
+        async function generateImage(i) {
+
+            const key = document.getElementById("apiKey").value
+
+            localStorage.setItem("geminiKey", key)
+
+            const spinner = document.getElementById("spin" + i)
+
+            spinner.innerText = "Generating image..."
+
+            try {
+
+                const prompt = promptTemplate(slides[i])
+
+                const response = await fetch("http://localhost:8000/generate-image", {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type": "application/json"
+
+                    },
+
+                    body: JSON.stringify({
+
+                        prompt: prompt,
+
+                    })
+
+                })
+
+                const data = await response.json()
+
+                const base64 = data.image
+
+                images[i] = base64
+
+                document.getElementById("img" + i).src = "data:image/png;base64," + base64
+
+                spinner.innerText = ""
+
+            } catch (e) {
+
+                spinner.innerText = "Error generating image"
+
+                console.error(e)
+
+            }
+
+        }
+
+        function retry(i) {
+
+            generateImage(i)
+
+        }
+
+        function downloadSlide(i) {
+
+            if (!images[i]) return
+
+            const link = document.createElement("a")
+
+            link.href = "data:image/png;base64," + images[i]
+
+            link.download = `slide_${i + 1}.png`
+
+            link.click()
+
+        }
+
+        async function downloadAll() {
+
+            const zip = new JSZip()
+
+            images.forEach((img, index) => {
+
+                if (img) {
+
+                    zip.file(`slide_${index + 1}.png`, img, { base64: true })
+
+                }
+
+            })
+
+            const blob = await zip.generateAsync({ type: "blob" })
+
+            const link = document.createElement("a")
+
+            link.href = URL.createObjectURL(blob)
+
+            link.download = "carousel_slides.zip"
+
+            link.click()
+
+        }
+
+        document.getElementById("apiKey").value = localStorage.getItem("geminiKey") || ""
+
+    </script>
+
+</body>
+
+</html>
